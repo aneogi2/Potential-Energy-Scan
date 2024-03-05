@@ -1,0 +1,90 @@
+# LAMMS Script
+boundary    p p p
+units       metal
+atom_style  atomic
+
+processors  * * 1
+
+#read_restart  system.restart.7000000
+
+read_data   interface_1000.data extra/atom/types 1
+
+pair_style  sw
+pair_coeff  * *  Si.sw Si Si Si Si
+
+
+mass 1 28.0855
+mass 2 28.0855
+mass 3 28.0855
+mass 4 28.0855
+#mass 5 28.0855
+
+# ----- Initialize -----
+neighbor     2.0 nsq
+neigh_modify delay 0 every 1 check yes
+
+#variable  nstepx equal 700.0
+#variable  nstepy equal round(ly*v_nstepx/lx)
+variable nstepx equal 500
+variable nstepy equal 500
+print " ${nstepx} ${nstepy}"
+
+region  del block INF INF INF INF INF -20
+delete_atoms region del
+
+
+variable  x1 equal "xlo + 0.5"
+variable  x2 equal "xhi - 0.5"
+variable  y1 equal "ylo + 0.5"
+variable  y2 equal "yhi - 0.5"
+variable  z1 equal "zlo + 1.0"
+variable  z2 equal "zhi + 1.0"
+
+#variable  delx equal (v_x2-v_x1)/v_nstepx
+variable  delx equal 30/500
+#variable  dely equal (v_x2-v_x1)/v_nstepy
+variable  dely equal 30/500
+
+
+variable  Etot equal "etotal"
+
+run 0
+
+variable  Einit equal ${Etot}
+variable  delE equal v_Einit-v_Etot
+
+print " Initial Energy: ${Einit} ; Total energy: ${Etot} "
+
+create_atoms 4 single ${x1} ${y1} -2.0
+
+write_data test.data
+
+group  substrate type 1
+group  probe type 4
+
+compute COM probe com
+
+
+
+variable cx equal c_COM[1]
+variable cy equal c_COM[2]
+variable cz equal c_COM[3]
+
+thermo_style custom step etotal v_cx v_cy v_cz
+variable i loop ${nstepx}
+variable newy equal v_y1-v_cy
+label outerloop
+displace_atoms probe move ${delx} 0.0 0.0
+    variable j loop ${nstepy}
+    label innerloop
+        displace_atoms probe move 0.0 ${dely} 0.0
+        run 0
+       
+        print " LogLog ${cx} ${cy} ${cz} ${delE} ${Etot} "
+        next j
+    jump in.lammps-1000K innerloop
+    displace_atoms probe move 0.0 ${newy} 0.0
+    #variable j delete 
+next i
+jump in.lammps-1000K outerloop
+
